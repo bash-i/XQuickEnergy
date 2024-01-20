@@ -31,20 +31,27 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Sign app APK
-        uses: ilharp/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDir: app/build/outputs/apk/release/
-          signingKey: ${{ secrets.ANDROID_SIGNING_KEY }}
-          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: 30.0.3
+        run: |
+          export JAVA_HOME="${{ env.JDK_DIR }}"
+          export PATH="${{ env.JDK_DIR }}/bin:${{ env.PATH }}"
+
+          jarsigner \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            -keystore ${{ secrets.ANDROID_KEYSTORE_FILE }} \
+            -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.ANDROID_KEY_PASSWORD }} \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            ${{ secrets.ANDROID_KEY_ALIAS }}
+
+          zipalign -v 4 \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            app/build/outputs/apk/release/app-release-signed.apk
 
       - name: Upload to Release Action
         uses: Shopify/upload-to-release@v1.0.1
         with:
           name: xqe-sesame-${{ github.event.release.tag_name }}.apk
-          path: ${{ steps.sign_app.outputs.signedFile }}
+          path: app/build/outputs/apk/release/app-release-signed.apk
           repo-token: ${{ github.token }}
           content-type: application/zip
